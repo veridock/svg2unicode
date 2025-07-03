@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "svg2unicode"
-version = "0.1.4"
+version = "0.1.5"
 description = "Convert SVG files to Unicode block characters for terminal display"
 authors = ["Tom Sapletta <info@softreck.dev>"]
 license = "MIT"

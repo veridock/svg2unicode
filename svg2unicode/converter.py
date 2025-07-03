@@ -1,14 +1,14 @@
 """SVG to Unicode converter implementation."""
 
 import io
-import math
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
 import cairosvg
 from PIL import Image, ImageOps
 
 # Unicode block characters - from light to dark
+# Block-shade characters for full-width raster mode
 BLOCKS = [
     ' ',      # 0/8: No block
     '▁',      # 1/8: Lower one eighth block
@@ -42,6 +42,52 @@ def svg_to_image(svg_path: Union[str, Path], width: int = 80) -> Image.Image:
     img = ImageOps.grayscale(img)
     
     return img
+
+# -------------------------------------------------
+#  Single-glyph (Braille) conversion helpers
+# -------------------------------------------------
+DOT_MAP = {
+    (0, 0): 1,  # row, col -> braille dot index
+    (1, 0): 2,
+    (2, 0): 3,
+    (3, 0): 7,
+    (0, 1): 4,
+    (1, 1): 5,
+    (2, 1): 6,
+    (3, 1): 8,
+}
+
+
+def image_to_glyph(img: Image.Image) -> str:
+    """Convert an image to a single Braille glyph (⣿ range).
+
+    The image is down-sampled to 4 × 8 (width × height) pixels, then each
+    column is folded into a single Braille dot column (2 columns → 8 dots).
+    A pixel <128 grayscale sets the corresponding dot.
+    """
+    small = img.resize((4, 8), Image.LANCZOS).convert("L")
+    pixels = small.load()
+
+    value = 0
+    for y in range(8):
+        for x in range(2):  # two columns in Braille cell
+            # original image has 4 columns → fold (0,2) into dot col 0; (1,3) into col 1
+            px_x = x * 2  # 0 or 2
+            # OR the two source columns per braille column
+            bright1 = pixels[px_x, y]
+            bright2 = pixels[px_x + 1, y]
+            dark = (bright1 < 128) or (bright2 < 128)
+            if dark:
+                dot_index = DOT_MAP[(y // 2, x)]  # y//2 groups rows into 4 levels
+                value |= 1 << (dot_index - 1)
+
+    return chr(0x2800 | value)
+
+
+def svg_to_glyph(svg_path: Union[str, Path]) -> str:
+    """Convert an SVG to a single Unicode Braille character."""
+    img = svg_to_image(svg_path, width=32)  # small raster for good sampling
+    return image_to_glyph(img)
 
 def image_to_unicode(img: Image.Image, width: int = 80) -> str:
     """

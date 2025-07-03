@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .converter import svg_to_unicode
+from .converter import svg_to_unicode, svg_to_glyph
 
 def parse_args(args: Optional[list[str]] = None) -> argparse.Namespace:
     """Parse command-line arguments."""
@@ -23,6 +23,11 @@ def parse_args(args: Optional[list[str]] = None) -> argparse.Namespace:
         default=80,
         help='Width of the output in characters (default: 80)'
     )
+    parser.add_argument(
+        '-g', '--glyph',
+        action='store_true',
+        help='Output a single Braille Unicode glyph instead of full raster.'
+    )
     return parser.parse_args(args)
 
 def main() -> None:
@@ -35,7 +40,10 @@ def main() -> None:
         sys.exit(1)
     
     try:
-        result = svg_to_unicode(svg_path, args.width)
+        if args.glyph:
+            result = svg_to_glyph(svg_path)
+        else:
+            result = svg_to_unicode(svg_path, args.width)
         print(result, end='')
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
