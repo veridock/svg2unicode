@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# svg2icon - Convert SVG to a small PNG and then to a Unicode character
+# Usage: svg2icon input.svg [output_size=16]
+
+# Check if ImageMagick is installed
+if ! command -v convert &> /dev/null; then
+    echo "Error: ImageMagick is required but not installed."
+    echo "Please install it with: sudo apt-get install imagemagick"
+    exit 1
+fi
+
+# Check if input file is provided
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 input.svg [output_size=16]"
+    exit 1
+fi
+
+input_file="$1"
+size="${2:-16}"  # Default size is 16px if not provided
+output_file="${input_file%.*}.png"
+
+# Convert SVG to PNG
+convert -background none -resize "${size}x${size}" "$input_file" "$output_file"
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to convert SVG to PNG"
+    exit 1
+fi
+
+echo "Converted $input_file to $output_file (${size}x${size}px)"
+
+# Function to convert image to Unicode block characters
+image_to_unicode() {
+    local image_path="$1"
+    local width=16  # Fixed width for the output
+    local height=16  # Fixed height for the output
+    
+    # Use ImageMagick to get image dimensions and pixel data
+    local pixels
+    pixels=$(convert "$image_path" -resize "${width}x${height}!" -monochrome -depth 1 -negate gray:- 2>/dev/null | 
+             xxd -b -c $((width/8)) | 
+             awk '{print $2}' | 
+             tr -d '\n' | 
+             fold -w 2 | 
+             sed 's/00/ /g; s/01/▄/g; s/10/▀/g; s/11/█/g')
+    
+    # Print the result in a grid
+    echo "Unicode representation (${width}x$((height/2))):"
+    echo "┌$(printf '─%.0s' $(seq 1 $width))┐"
+    for ((i=0; i<${#pixels}; i+=$width)); do
+        echo -n "│${pixels:$i:$width}│"
+        echo
+    done
+    echo "└$(printf '─%.0s' $(seq 1 $width))┘"
+}
+
+# Convert the PNG to Unicode
+image_to_unicode "$output_file"
+
+echo "PNG saved as: $output_file"
+echo "Tip: The unicode representation works best with monochrome SVGs."

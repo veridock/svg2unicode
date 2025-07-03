@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# svg2txt - Convert SVG to a text-based icon for terminal use
+# Usage: svg2txt input.svg [width=16]
+
+set -e
+
+# Check dependencies
+if ! command -v convert &> /dev/null; then
+    echo "Error: ImageMagick is required but not installed."
+    echo "On Ubuntu/Debian, install with: sudo apt-get install imagemagick"
+    exit 1
+fi
+
+# Check input
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 input.svg [width]"
+    echo "Example: $0 image.svg 32"
+    exit 1
+fi
+
+input_svg="$1"
+width="${2:-16}"  # Default width is 16 characters
+height=$((width / 2))  # Terminal characters are roughly 2x taller than wide
+
+# Create a temporary file for the PNG
+temp_png="$(mktemp).png"
+
+# Convert SVG to PNG with the specified dimensions
+echo "Converting $input_svg to ${width}x${height} text..."
+convert -background white -alpha remove -alpha off -resize "${width}x${height}" "$input_svg" -monochrome "$temp_png"
+
+# Function to convert image to text using a simpler approach
+image_to_text() {
+    local img_path="$1"
+    local width=$2
+    local height=$3
+    
+    # Enhanced character map with more granularity
+    local charset=(" " "·" "·" "·" "·" "░" "░" "░" "▒" "▒" "▒" "▓" "▓" "▓" "█" "█")
+    
+    # Convert to grayscale, enhance contrast, and get image data
+    convert "$img_path" -resize "${width}x${height}!" \
+        -colorspace Gray -normalize -contrast-stretch 5%x5% \
+        -negate txt:- 2>/dev/null | \
+    grep -v '^#' | \
+    awk -v w=$width -v h=$height -v cs="${charset[*]}" '
+    BEGIN {
+        # Split the charset into an array
+        split(cs, chars, " ")
+        max_idx = length(chars)
+    }
+    {
+        # Get the x,y coordinates
+        split($1, coord, ",")
+        x = substr(coord[1], 2) + 0  # Convert to number
+        y = substr(coord[2], 1, length(coord[2])-1) + 0
+        
+        # Store the pixel value (0-255)
+        split($3, rgb, "(")
+        split(rgb[2], values, ")")
+        value = values[1] + 0
+        
+        # Map the value to a character with gamma correction for better contrast
+        gamma = 0.7
+        normalized = (255 - value) / 255.0
+        corrected = (normalized ^ gamma) * 255
+        idx = int(corrected * (max_idx - 1) / 255)
+        
+        # Clamp the index
+        if (idx < 0) idx = 0
+        if (idx >= max_idx) idx = max_idx - 1
+        
+        # Store the character
+        pixels[y * w + x] = chars[idx + 1]
+    }
+    END {
+        # Print the pixels in a grid
+        for (y = 0; y < h; y++) {
+            for (x = 0; x < w; x++) {
+                printf "%s", pixels[y * w + x]
+            }
+            printf "\n"
+        }
+    }'
+}
+
+# Display the text representation
+echo ""
+echo "Text representation (${width}x${height}):"
+echo "┌$(printf '─%.0s' $(seq 1 $width))┐"
+image_to_text "$temp_png" "$width" "$height" | while IFS= read -r line; do
+    echo "│$line│"
+done
+echo "└$(printf '─%.0s' $(seq 1 $width))┘"
+
+# Clean up
+rm -f "$temp_png"
+
+echo ""
+echo "Tip: You can copy the text between the borders to use in your terminal."
+echo "     Adjust the width parameter for different sizes (e.g., $0 $input_svg 32)"
+echo "     Character set: ' ' '·' '░' '▒' '▓' '█' (light to dark)"

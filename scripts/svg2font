@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# svg2font - Convert SVG to a custom font with the icon
+# Creates a TTF font with the SVG as a character
+# Usage: svg2font input.svg [output_font_name]
+
+set -e
+
+# Check dependencies
+for cmd in fontforge convert; do
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "Error: $cmd is required but not installed."
+        echo "On Ubuntu/Debian, install with: sudo apt-get install $cmd"
+        exit 1
+    fi
+done
+
+# Check input
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 input.svg [output_font_name]"
+    exit 1
+fi
+
+input_svg="$1"
+font_name="${2:-customicon}"
+output_dir="${font_name}_font"
+output_ttf="${font_name}.ttf"
+output_png="${font_name}_16.png"
+
+# Create output directory
+mkdir -p "$output_dir"
+cd "$output_dir" || exit 1
+
+# Convert SVG to 16x16 PNG
+echo "Converting $input_svg to 16x16 PNG..."
+convert -background none -resize "16x16" "../$input_svg" "$output_png"
+
+# Create FontForge script
+cat > generate_font.pe << 'EOF'
+# FontForge script to create a font with a single character
+
+# Create a new font
+New()
+SetFontNames("$font_name")
+
+# Create a new character at U+E000 (Private Use Area)
+Select(0uE000)
+
+# Import the PNG as a glyph
+Import("$output_png")
+ScaleToEm(1000)
+
+# Set font metrics
+SetAscent(800)
+SetDescent(200)
+SetOS2Value("WinAscent", 800)
+SetOS2Value("WinDescent", 200)
+SetOS2Value("TypoAscent", 800)
+SetOS2Value("TypoDescent", -200)
+SetOS2Value("HHeadAscent", 800)
+SetOS2Value("HHeadDescent", -200)
+
+# Generate the TTF font
+Generate("$output_ttf")
+
+# Exit FontForge
+Exit()
+EOF
+
+# Run FontForge to generate the font
+echo "Generating TTF font..."
+fontforge -script generate_font.pe 2>/dev/null || {
+    echo "Error: Failed to generate font"
+    exit 1
+}
+
+echo ""
+echo "Font generated: $output_dir/$output_ttf"
+echo ""
+echo "To use this font:"
+echo "1. Install the font on your system:"
+echo "   - On Linux:   cp $output_ttf ~/.local/share/fonts/ && fc-cache -f -v"
+echo "   - On macOS:   open $output_ttf and click 'Install Font'"
+echo "   - On Windows: Right-click $output_ttf and select 'Install'"
+echo "2. Set your terminal to use the '$font_name' font"
+echo "3. Use the character in your shell:"
+echo "   - In bash:    echo -e '\\UE000'"
+echo "   - In Python:  print('\\uE000')"
