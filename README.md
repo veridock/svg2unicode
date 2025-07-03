@@ -1,4 +1,47 @@
-# 🧠 SView - SVG Viewer & PWA Launcher
+# 🖼️ svg2unicode
+
+Tiny CLI & Python library that renders SVG files directly in your terminal.
+
+*  **Raster mode** – full-width Unicode block mosaic.
+*  **Glyph mode**  – single-character Braille icon (`-g | --glyph`).
+*  Pure-Python implementation using **CairoSVG** and **Pillow**.
+
+---
+
+## 📦 Installation
+```bash
+# clone repo and install editable
+git clone https://github.com/veridock/svg2unicode.git
+cd svg2unicode
+pip install -e .
+```
+
+## 🚀 Quick start
+```bash
+# Full-width Unicode art (80 chars wide)
+python -m svg2unicode.cli examples/pong-game.svg -w 80
+
+# Single Braille glyph
+python -m svg2unicode.cli examples/pong-game.svg --glyph
+```
+
+Example output:
+```
+⣿
+```
+
+---
+
+## CLI options
+| flag | description | default |
+|------|-------------|---------|
+| `-w, --width N` | output width in characters (raster mode) | 80 |
+| `-g, --glyph` | emit single Braille glyph | off |
+
+---
+
+The rest of this README is legacy documentation from the original **SView** project and will be trimmed in future clean-ups.
+
 
 **XQR Integration Enabled** | **Universal File System** | **Cross-Platform**
 
@@ -113,11 +156,14 @@ sview list /path/to/search --recursive
 # Search for SVGs by name
 sview search "icon" /path/to/search
 
-# Filter by size
-sview list /path/to/svgs --min-size 1M --max-size 10M
+# Search in specific directory
+sview search "icon" /path/to/search
 
-# Find recently modified files
-sview list /path/to/svgs --modified-within 7d
+# Case-insensitive search
+sview search -i "logo"
+
+# Search with regular expressions
+sview search --regex "icon-.*"
 ```
 
 #### Batch Processing
@@ -134,7 +180,7 @@ done
 #### fzf Integration
 ```bash
 # Interactive file selection with preview
-export FZF_DEFAULT_OPTS='--preview "sview view {} --width 40 --height 15 --no-color 2>/dev/null || echo \"Not an SVG file\""'
+export FZF_DEFAULT_OPTS='--preview "sview view {} --width 60 --height 20"'
 selected=$(find . -type f | fzf)
 [ -n "$selected" ] && sview view "$selected"
 ```
@@ -617,6 +663,7 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## 🔍 Viewing File Details
 
 ```bash
@@ -1477,3 +1524,20 @@ Apache License - see [LICENSE](LICENSE) for details.
 ---
 
 **SView** - Where SVG meets PWA meets AI 🚀🧠✨
+
+## Przykłady uruchomienia
+
+Zakładamy, że pliki SVG z przykładami są w katalogu `examples/` w głównym katalogu repozytorium.
+
+```bash
+# pełna mozaika
+python -m svg2unicode.cli examples/pong-game.svg
+
+# pojedynczy glif
+python -m svg2unicode.cli examples/pong-game.svg -g
+```
+
+- Pliki przykładowe SVG znajdziesz w katalogu `examples/`:
+  - `examples/pong-game.svg`
+  - `examples/dashboard.svg`
+  - `examples/simple-chart.svg`
