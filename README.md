@@ -85,10 +85,25 @@ poetry publish --build
 ```
 
 
-```caddyfile
-magick examples/pong-game.svg -background none -resize 16x16 examples/pong-game.png
-./scripts/svg2uchar examples/pong-game.png
+## SVG → Unicode (1-char glyph)
+
+> Wymagania: [ImageMagick](https://imagemagick.org/) (`magick`) + skrypt `scripts/svg2uchar`.
+
+### Pełny proces krok-po-kroku
+```bash
+# 1) Zmniejsz SVG do 16×16 px (PNG)
+magick convert examples/pong-game.svg -background none -resize 16x16 examples/pong-game.png
+
+# 2) Zamień PNG na pojedynczy znak Braille
+./scripts/svg2uchar examples/pong-game.png   # ⇒ ⣿
 ```
+
+### Szybka ścieżka (SVG bezpośrednio)
+```bash
+./scripts/svg2uchar examples/pong-game.svg   # ⇒ ⣿
+```
+
+Skrypt automatycznie próbuje dopasować wzór pikseli 4×8 do 8-punktowego znaku Braille (zakres U+2800–U+28FF). Dzięki temu otrzymujesz jedną „ikonę” szeroką na jeden znak, gotową do wstawienia do promptu, tabeli lub listy.
 ---
 
 ## License

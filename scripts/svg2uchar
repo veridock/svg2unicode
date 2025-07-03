@@ -67,7 +67,9 @@ done
 
 codepoint=$((0x2800 + value))
 # Wypisz gotowy znak Braille (UTF-8) i zakończ
-printf "\\U%08x\n" "$codepoint"
+hex=$(printf '%08x' "$codepoint")
+# echo -e interpretuje sekwencję \Uhhhhhhhh
+echo -e "\\U${hex}"
 exit 0
 
 # Map PBM bits to Braille dot positions
