@@ -53,9 +53,8 @@ done
 
 # Map to Braille code-point
 value=0
-# final_bits index 0..7 corresponds to dots 1,4,2,5,3,6,7,8 arrangement row-major 4x2 earlier.
-# We'll map col bits to dot positions sequentially left-to-right:
-# col0->dot1, col1->dot4, col2->dot2, col3->dot5, col4->dot3, col5->dot6, col6->dot7, col7->dot8
+# final_bits index 0..7 odpowiada kropkom Braille'a w kolejności:
+# 1,4,2,5,3,6,7,8 (kolumny od lewej do prawej, 4 wiersze ⇒ 8 bitów)
 for i in {0..7}; do
     bit=${final_bits:$i:1}
     if [ "$bit" = "1" ]; then
@@ -67,13 +66,9 @@ for i in {0..7}; do
 done
 
 codepoint=$((0x2800 + value))
-printf "\u28%02x\n" $((value))
-# Expect exactly 8 bits (2×4). If not, fallback.
-if [ ${#map} -ne 8 ]; then
-    echo "•"
-    rm -f "$temp_png"
-    exit 0
-fi
+# Wypisz gotowy znak Braille (UTF-8) i zakończ
+printf "\\U%08x\n" "$codepoint"
+exit 0
 
 # Map PBM bits to Braille dot positions
 # Dots: 1 4

@@ -84,6 +84,11 @@ poetry version patch  # bump version
 poetry publish --build
 ```
 
+
+```caddyfile
+magick examples/pong-game.svg -background none -resize 16x16 examples/pong-game.png
+./scripts/svg2uchar examples/pong-game.png
+```
 ---
 
 ## License
