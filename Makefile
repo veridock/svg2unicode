@@ -142,10 +142,13 @@ release: clean test build-all
 package: build-all
 	@$(SCRIPTS_DIR)/package_release.sh
 
-# Publish to registries
+# Publish to PyPI using Poetry
 .PHONY: publish
 publish:
-	@$(SCRIPTS_DIR)/publish.sh
+	@echo "$(BLUE)📦 Publishing to PyPI...$(NC)"
+	poetry version patch
+	poetry publish --build
+
 # Push changes to remote repository
 .PHONY: push
 push:
