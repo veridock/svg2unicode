@@ -1,26 +1,12 @@
 #!/usr/bin/env bash
 
-# svg2uchar - Convert SVG to a single Braille Unicode character representing the SVG
-# Algorithm:
-#   1. Resize the SVG to 4×8 pixels (width×height).
-#   2. For each of the 32 pixels, set bit = 1 if grayscale < 128 else 0.
-#   3. Fold the 32-bit array into 8 bits by OR-ing every group of 4 rows:
-#        final[i] = row0[i] | row1[i] | row2[i] | row3[i]
-#   4. Map those 8 bits to Braille dots (⣿ range U+2800 – U+28FF).
-#   5. Output the single Braille character.
-# This gives up to 256 unique glyphs while remaining one code-point wide.
-# Produces up to 256 unique glyphs (U+2800–U+28FF) using an 2×4 pixel sample.
-# Usage: svg2uchar input.svg
-# Usage: svg2uchar input.svg
-
-# Check if input file is provided
-if [ $# -eq 0 ]; then
-    echo "Usage: $0 input.svg"
-    exit 1
-fi
+# svg2uchar - Convert SVG to a distinctive Unicode character icon
+# Enhanced version with better visual representation
+# Usage: svg2uchar input.svg [size=16]
 
 input_file="$1"
-temp_png="${input_file%.*}.tmp.png"
+[ -z "$input_file" ] && { echo "Usage: $0 input.svg [size=16]"; exit 1; }
+size="${2:-16}"  # Default size 16x16
 
 # Check if ImageMagick is installed
 if ! command -v convert &> /dev/null; then
@@ -29,73 +15,65 @@ if ! command -v convert &> /dev/null; then
     exit 1
 fi
 
-# Extract PBM ASCII (P1) pixels directly: 2 x 4 pixels → 8 bits
-# Generate 4×8 grayscale text data via ImageMagick and extract 0/1 brightness bits
-pixel_bits=$(magick convert -background none -resize 4x8\! -colorspace gray -depth 8 "$input_file" txt:- 2>/dev/null | \
-  awk -F'[(),]' '/^[ ]*[0-9]+/ {val=strtonum($3); printf (val<128?1:0)}')
+# Create a temporary file for the resized image
+temp_png=$(mktemp /tmp/svg2uchar_XXXXXX.png)
+trap 'rm -f "$temp_png"' EXIT
 
-# Expect 32 bits (4×8). If not, fallback.
-if [ ${#pixel_bits} -ne 32 ]; then
-    echo "•"
-    exit 0
+# Convert SVG to grayscale and resize to 4x4 pixels
+convert "$input_file" -background none -resize "${size}x${size}!" -colorspace gray -depth 8 "$temp_png"
+
+# Get pixel data and calculate brightness
+pixel_data=$(convert "$temp_png" -resize '4x4!' -depth 8 txt:- 2>/dev/null | 
+             grep -Eo '\([0-9]+,[0-9]+,[0-9]+\)' | 
+             tr -d '()' | 
+             awk -F, '{printf "%d\n", ($1 + $2 + $3) / 3}')
+
+# Determine active dots based on brightness
+braille_bits=0
+brightness_threshold=128
+
+# Braille dot positions (1-8):
+# 1 4
+# 2 5
+# 3 6
+# 7 8
+
+# Map 4x4 grid to Braille pattern (2x4 dots)
+for i in {0..15}; do
+    # Get brightness value (0-255)
+    bright=$(echo "$pixel_data" | sed -n "$((i+1))p")
+    
+    # If pixel is dark enough, set corresponding Braille dot
+    if [ "$bright" -lt $brightness_threshold ]; then
+        # Map 4x4 position to Braille dot (1-8)
+        case $i in
+            0)  dot=1;;  4)  dot=4;;
+            1)  dot=1;;  5)  dot=4;;
+            2)  dot=2;;  6)  dot=5;;
+            3)  dot=2;;  7)  dot=5;;
+            8)  dot=3;; 12)  dot=6;;
+            9)  dot=3;; 13)  dot=6;;
+            10) dot=7;; 14)  dot=8;;
+            11) dot=7;; 15)  dot=8;;
+        esac
+        braille_bits=$((braille_bits | (1 << (dot-1))))
+    fi
+done
+
+# Calculate Unicode code point (U+2800 + braille_bits)
+codepoint=$((0x2800 + braille_bits))
+
+# Output the character
+hex=$(printf '%04x' "$codepoint")
+if [ "$(uname)" = "Darwin" ]; then
+    # macOS uses different syntax for Unicode escapes
+    python -c "print(chr(0x$hex), end='')"
+    echo
+else
+    printf "\\U$hex\n"
 fi
 
-# Fold 32 bits (rows 0-7) into 8 final bits (columns 0-7)
-final_bits=""
-for ((col=0; col<8; col++)); do
-    bit=0
-    for ((row=0; row<4; row++)); do
-        idx=$((row*8 + col))
-        if [ "${pixel_bits:$idx:1}" = "1" ]; then bit=1; break; fi
-    done
-    final_bits+=$bit
-done
-
-# Map to Braille code-point
-value=0
-# final_bits index 0..7 odpowiada kropkom Braille'a w kolejności:
-# 1,4,2,5,3,6,7,8 (kolumny od lewej do prawej, 4 wiersze ⇒ 8 bitów)
-for i in {0..7}; do
-    bit=${final_bits:$i:1}
-    if [ "$bit" = "1" ]; then
-        case $i in
-            0) dot=1;; 1) dot=4;; 2) dot=2;; 3) dot=5;; 4) dot=3;; 5) dot=6;; 6) dot=7;; 7) dot=8;;
-        esac
-        value=$((value | 1 << (dot-1)))
-    fi
-done
-
-codepoint=$((0x2800 + value))
-# Wypisz gotowy znak Braille (UTF-8) i zakończ
-hex=$(printf '%08x' "$codepoint")
-# echo -e interpretuje sekwencję \Uhhhhhhhh
-echo -e "\\U${hex}"
 exit 0
-
-# Map PBM bits to Braille dot positions
-# Dots: 1 4
-#       2 5
-#       3 6
-#       7 8
-value=0
-for idx in {0..7}; do
-    bit=${map:$idx:1}
-    # Row = idx / 2, Col = idx % 2
-    row=$((idx / 2))
-    col=$((idx % 2))
-    case $row,$col in
-        0,0) dot=1;; 0,1) dot=4;;
-        1,0) dot=2;; 1,1) dot=5;;
-        2,0) dot=3;; 2,1) dot=6;;
-        3,0) dot=7;; 3,1) dot=8;;
-    esac
-    if [ "$bit" = "1" ]; then
-        value=$((value | 1 << (dot-1)))
-    fi
-done
-
-codepoint=$((0x2800 + value))
-printf "\U%08x\n" "$codepoint"
 
 
 
