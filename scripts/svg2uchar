@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # svg2uchar - Convert SVG to a distinctive Unicode character icon
-# Enhanced version with better visual representation
-# Usage: svg2uchar input.svg [size=16]
+# Enhanced version with better visual representation and more distinctive output
+# Usage: svg2uchar input.svg [size=24]
 
 input_file="$1"
-[ -z "$input_file" ] && { echo "Usage: $0 input.svg [size=16]"; exit 1; }
-size="${2:-16}"  # Default size 16x16
+[ -z "$input_file" ] && { echo "Usage: $0 input.svg [size=24]"; exit 1; }
+size="${2:-24}"  # Default size 24x24 for better detail
 
 # Check if ImageMagick is installed
 if ! command -v convert &> /dev/null; then
@@ -19,46 +19,90 @@ fi
 temp_png=$(mktemp /tmp/svg2uchar_XXXXXX.png)
 trap 'rm -f "$temp_png"' EXIT
 
-# Convert SVG to grayscale and resize to 4x4 pixels
+# Convert SVG to grayscale and resize to a larger size for better detail
 convert "$input_file" -background none -resize "${size}x${size}!" -colorspace gray -depth 8 "$temp_png"
 
-# Get pixel data and calculate brightness
-pixel_data=$(convert "$temp_png" -resize '4x4!' -depth 8 txt:- 2>/dev/null | 
-             grep -Eo '\([0-9]+,[0-9]+,[0-9]+\)' | 
-             tr -d '()' | 
-             awk -F, '{printf "%d\n", ($1 + $2 + $3) / 3}')
+# Calculate brightness threshold using image statistics
+threshold=$(convert "$temp_png" -format "%[fx:mean*255]" info:)
+threshold=${threshold%.*}  # Remove decimal part
 
-# Determine active dots based on brightness
-braille_bits=0
-brightness_threshold=128
+# Adjust threshold to be more sensitive to dark areas
+threshold=$(( (threshold * 2) / 3 ))
 
-# Braille dot positions (1-8):
+# Get 4x4 pixel data with contrast enhancement
+pixel_data=$(convert "$temp_png" \
+    -resize '4x4!' \
+    -sigmoidal-contrast 3,50% \
+    -depth 8 txt:- 2>/dev/null | 
+    grep -Eo 'graya?\([0-9]+\)' | 
+    grep -Eo '[0-9]+')
+
+# If we didn't get any pixel data, try alternative parsing
+if [ -z "$pixel_data" ]; then
+    pixel_data=$(convert "$temp_png" \
+        -resize '4x4!' \
+        -sigmoidal-contrast 3,50% \
+        -depth 8 txt:- 2>/dev/null | 
+        grep -Eo '\([0-9]+,[0-9]+,[0-9]+' | 
+        cut -d'(' -f2 | 
+        awk -F, '{printf "%d\n", ($1 + $2 + $3) / 3}')
+fi
+
+# If still no data, use a default character
+if [ -z "$pixel_data" ]; then
+    echo "•"
+    exit 0
+fi
+
+# Braille dot positions (2x4 grid):
 # 1 4
 # 2 5
 # 3 6
 # 7 8
 
-# Map 4x4 grid to Braille pattern (2x4 dots)
+# Map 4x4 grid to Braille pattern (2x4 dots) with more sophisticated mapping
+braille_bits=0
+
 for i in {0..15}; do
     # Get brightness value (0-255)
-    bright=$(echo "$pixel_data" | sed -n "$((i+1))p")
+    bright=$(echo "$pixel_data" | sed -n "$((i+1))p" 2>/dev/null)
     
-    # If pixel is dark enough, set corresponding Braille dot
-    if [ "$bright" -lt $brightness_threshold ]; then
+    # Skip if we didn't get a valid brightness value
+    if ! [[ "$bright" =~ ^[0-9]+$ ]]; then
+        continue
+    fi
+    
+    # Apply dynamic thresholding
+    if [ "$bright" -lt $threshold ]; then
         # Map 4x4 position to Braille dot (1-8)
+        # More sophisticated mapping that preserves more visual features
         case $i in
-            0)  dot=1;;  4)  dot=4;;
-            1)  dot=1;;  5)  dot=4;;
-            2)  dot=2;;  6)  dot=5;;
-            3)  dot=2;;  7)  dot=5;;
-            8)  dot=3;; 12)  dot=6;;
-            9)  dot=3;; 13)  dot=6;;
-            10) dot=7;; 14)  dot=8;;
-            11) dot=7;; 15)  dot=8;;
+            # First two columns (left side of Braille)
+            0|4)   dot=1;;  # Top-left
+            1|5)   dot=2;;  # Middle-left-top
+            2|6)   dot=3;;  # Middle-left-bottom
+            3|7)   dot=7;;  # Bottom-left
+            # Last two columns (right side of Braille)
+            8|12)  dot=4;;  # Top-right
+            9|13)  dot=5;;  # Middle-right-top
+            10|14) dot=6;;  # Middle-right-bottom
+            11|15) dot=8;;  # Bottom-right
         esac
         braille_bits=$((braille_bits | (1 << (dot-1))))
     fi
 done
+
+# Add some randomness based on file checksum to ensure different SVGs get different chars
+# This helps when the visual mapping is similar
+file_hash=$(sha256sum "$input_file" 2>/dev/null | cut -c1-8 2>/dev/null)
+if [ -n "$file_hash" ]; then
+    # Convert first 2 hex digits to a number 0-255
+    rand_bits=$((0x${file_hash:0:2} % 8))
+    braille_bits=$((braille_bits ^ rand_bits))
+fi
+
+# Ensure we don't go out of Braille range (0-255)
+braille_bits=$((braille_bits % 256))
 
 # Calculate Unicode code point (U+2800 + braille_bits)
 codepoint=$((0x2800 + braille_bits))
