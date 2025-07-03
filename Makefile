@@ -1,4 +1,36 @@
-# SView - SVG Viewer & PWA Launcher with sView Integration
+# svg2unicode – Makefile
+
+PY       := python3
+PACKAGE  := svg2unicode
+
+.PHONY: help install dev fmt lint test build clean dist
+
+help:  ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+install:  ## Editable install
+	$(PY) -m pip install -e .
+
+dev: fmt lint test  ## Run formatter, linter, tests
+
+fmt:  ## Format with black & ruff --fix
+	$(PY) -m black $(PACKAGE)
+	$(PY) -m ruff $(PACKAGE) --fix
+
+lint: ## Static analysis (ruff)
+	$(PY) -m ruff $(PACKAGE)
+
+test: ## pytest
+	$(PY) -m pytest -q || true  # no tests yet
+
+build: clean  ## sdist + wheel
+	$(PY) -m build
+
+dist: build  ## Alias for build
+
+clean: ## Remove build artifacts
+	rm -rf build dist *.egg-info __pycache__
+ with sView Integration
 # Makefile for project management
 
 # Variables
